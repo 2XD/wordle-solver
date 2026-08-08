@@ -9,10 +9,8 @@ BASE = Path(__file__).resolve().parent
 ANSWERS_FILE = BASE / "wordle_answers.txt"
 ALLOWED_FILE = BASE / "wordle_allowed_guesses.txt"
 
-# Wordle feedback: 0 = gray, 1 = yellow, 2 = green.
+#0 = gray, 1 = yellow, 2 = green.
 def feedback(guess: str, answer: str) -> tuple[int, ...]:
-    # Exact Wordle duplicate-letter handling, with no allocations beyond a small
-    # integer count array. 0=gray, 1=yellow, 2=green.
     result = [0] * 5
     counts = [0] * 26
     for i in range(5):
@@ -116,9 +114,6 @@ def analyze_opening(answers: list[str], guesses: list[str], opening: list[str]) 
         # Aggregate over all possible answers. This is what a blind simulation uses.
         solved = len(candidates) if all(all(x == 2 for x in p) for p in groups if p == (2, 2, 2, 2, 2)) else 0
         guesses_used += 1
-
-        # For the fixed opening, don't choose a real feedback pattern here;
-        # this section just reports the distribution from the current candidate set.
         sizes = Counter(len(g) for g in groups.values())
         print("Remaining-candidate distribution (group size -> number of patterns):")
         print("  " + ", ".join(f"{size}->{count}" for size, count in sorted(sizes.items())))
@@ -157,8 +152,7 @@ def simulate_fixed_opening(answers: list[str], guesses: list[str], opening: list
             n += 1
             key = tuple(candidates)
             if key not in branch_cache:
-                # Prefer legal guesses that are also candidates only when the candidate
-                # set is tiny; otherwise the full legal pool can provide more information.
+                # Prefer legal guesses that are also candidates when list is small enough
                 best = best_guesses(candidates, guess_pool, limit=1, restrict_to_candidates=True)[0][0]
                 branch_cache[key] = best
             guess = branch_cache[key]
