@@ -1,20 +1,17 @@
-"""
-Wordle Solver GUI
-Run with:
-    python wordle_v2.py --gui
-"""
-
 import tkinter as tk
 from tkinter import messagebox
-
-from wordle import load_data, cached_feedback, best_guesses
+from wordle import (
+    load_data,
+    cached_feedback,
+    best_guesses,
+    OPENING_GUESSES,
+)
 
 
 BG = "#121212"
 PANEL = "#1e1e1e"
 TEXT = "#f5f5f5"
 MUTED = "#a8a8a8"
-BORDER = "#333333"
 GRAY = "#3a3a3c"
 YELLOW = "#b59f3b"
 GREEN = "#538d4e"
@@ -35,8 +32,9 @@ class WordleGUI:
 
         self.build_ui()
         self.entry.focus_set()
-        self.update_candidates()
-        self.update_recommendations()
+
+        # Show the precomputed opening guesses.
+        self.show_opening_guesses()
 
     def label(self, parent, text, size=10, bold=False, color=TEXT):
         return tk.Label(
@@ -52,6 +50,7 @@ class WordleGUI:
         outer.pack()
 
         self.label(outer, "WORDLE SOLVER", 22, True).pack()
+
         self.label(
             outer,
             "Enter your guess below, then click the tiles to match Wordle.",
@@ -59,7 +58,7 @@ class WordleGUI:
             color=MUTED,
         ).pack(pady=(3, 18))
 
-        # Guess input — no Set Guess button.
+        # Guess input.
         input_frame = tk.Frame(outer, bg=BG)
         input_frame.pack()
 
@@ -82,6 +81,7 @@ class WordleGUI:
         self.tile_frame.pack(pady=16)
 
         self.tiles = []
+
         for i in range(5):
             button = tk.Button(
                 self.tile_frame,
@@ -122,7 +122,7 @@ class WordleGUI:
         )
         submit.pack(pady=(14, 18), ipady=5)
 
-        # Always-visible recommendations.
+        # Recommendations.
         self.make_section(outer, "🧠  BEST NEXT GUESSES")
 
         self.label(
@@ -146,12 +146,17 @@ class WordleGUI:
         )
         self.recommendations.pack(pady=(6, 12))
 
-        # Possible answers are hidden until <= 10.
+        # Possible answers stay hidden until there are 10 or fewer.
         self.possible_title = self.make_section(
-            outer, "🎯  POSSIBLE ANSWERS"
+            outer,
+            "🎯  POSSIBLE ANSWERS",
         )
+
         self.possible_label = self.label(
-            outer, "", 9, color=MUTED
+            outer,
+            "",
+            9,
+            color=MUTED,
         )
         self.possible_label.pack(anchor="w", pady=(0, 4))
 
@@ -172,7 +177,10 @@ class WordleGUI:
         self.bottom.pack(fill="x", pady=(12, 0))
 
         self.status = self.label(
-            self.bottom, "Starting with no guesses entered.", 9, color=MUTED
+            self.bottom,
+            "Starting with no guesses entered.",
+            9,
+            color=MUTED,
         )
         self.status.pack(side="left")
 
@@ -194,42 +202,69 @@ class WordleGUI:
 
     def make_section(self, parent, title):
         frame = tk.Frame(parent, bg=BG)
-        # Return label; caller can place/forget it.
-        label = self.label(frame, title, 12, True)
+
+        label = self.label(
+            frame,
+            title,
+            12,
+            True,
+        )
         label.pack(anchor="w")
-        frame.pack(fill="x", pady=(2, 0))
+
+        frame.pack(
+            fill="x",
+            pady=(2, 0),
+        )
+
         return frame
 
+    def show_opening_guesses(self):
+        """Show the static opening ranking without calculating anything."""
+
+        self.recommendations.delete(0, tk.END)
+
+        for rank, guess in enumerate(OPENING_GUESSES, 1):
+            self.recommendations.insert(
+                tk.END,
+                f"{rank:>2}. {guess.upper()}",
+            )
+
+        self.status.config(
+            text="Opening guesses are precomputed."
+        )
+
     def on_typing(self, _event=None):
-        text = "".join(c for c in self.entry.get().lower() if c.isalpha())[:5]
-        if text != self.entry.get():
-            self.entry.delete(0, tk.END)
-            self.entry.insert(0, text.upper())
-        else:
-            # Keep displayed input uppercase.
-            pos = self.entry.index(tk.INSERT)
-            self.entry.delete(0, tk.END)
-            self.entry.insert(0, text.upper())
-            try:
-                self.entry.icursor(min(pos, 5))
-            except tk.TclError:
-                pass
+        text = "".join(
+            c for c in self.entry.get().lower()
+            if c.isalpha()
+        )[:5]
+
+        self.entry.delete(0, tk.END)
+        self.entry.insert(0, text.upper())
 
         self.current_guess = text
+
         for i in range(5):
-            self.tiles[i].config(text=text[i].upper() if i < len(text) else "")
+            self.tiles[i].config(
+                text=text[i].upper()
+                if i < len(text)
+                else ""
+            )
+
         self.colors = [0] * 5
         self.refresh_tiles()
 
     def cycle_tile(self, i):
         if len(self.current_guess) != 5:
             return
+
         self.colors[i] = (self.colors[i] + 1) % 3
         self.refresh_tiles()
 
     def refresh_tiles(self):
         for i, tile in enumerate(self.tiles):
             state = self.colors[i]
+
             if state == 0:
                 bg, fg = GRAY, TEXT
             elif state == 1:
@@ -248,7 +283,9 @@ class WordleGUI:
         guess = self.current_guess.strip().lower()
 
         if len(guess) != 5:
-            self.status.config(text="Enter exactly 5 letters.")
+            self.status.config(
+                text="Enter exactly 5 letters."
+            )
             return
 
         if guess not in self.guesses:
@@ -264,15 +301,23 @@ class WordleGUI:
             self.status.config(
                 text=f"Solved!  {guess.upper()}  🎉"
             )
-            self.history.append((guess, pattern))
+
+            self.history.append(
+                (guess, pattern)
+            )
+
             self.candidates = [guess]
+
             self.update_candidates()
             self.update_recommendations()
+
             return
 
         before = len(self.candidates)
+
         new_candidates = [
-            answer for answer in self.candidates
+            answer
+            for answer in self.candidates
             if cached_feedback(guess, answer) == pattern
         ]
 
@@ -290,11 +335,15 @@ class WordleGUI:
         self.entry.delete(0, tk.END)
         self.current_guess = ""
         self.colors = [0] * 5
+
         for tile in self.tiles:
             tile.config(text="")
+
         self.refresh_tiles()
 
         self.update_candidates()
+
+        # This is the first time we do any real scoring.
         self.update_recommendations()
 
         self.status.config(
@@ -309,45 +358,82 @@ class WordleGUI:
         n = len(self.candidates)
 
         if n <= 10:
-            self.possible_title.pack(fill="x", pady=(2, 0))
-            self.possible_label.pack(anchor="w", pady=(0, 4))
-            self.possible_box.pack(fill="x")
+            self.possible_title.pack(
+                fill="x",
+                pady=(2, 0),
+            )
+
+            self.possible_label.pack(
+                anchor="w",
+                pady=(0, 4),
+            )
+
+            self.possible_box.pack(
+                fill="x"
+            )
 
             self.possible_label.config(
-                text=f"{n} possible answer{'s' if n != 1 else ''}"
+                text=(
+                    f"{n} possible answer"
+                    f"{'s' if n != 1 else ''}"
+                )
             )
-            self.possible_box.config(state="normal")
-            self.possible_box.delete("1.0", tk.END)
+
+            self.possible_box.config(
+                state="normal"
+            )
+
+            self.possible_box.delete(
+                "1.0",
+                tk.END,
+            )
 
             if n == 1:
                 self.possible_box.insert(
-                    "1.0", f"🎯  {self.candidates[0].upper()}"
+                    "1.0",
+                    f"🎯  {self.candidates[0].upper()}",
                 )
             else:
                 self.possible_box.insert(
                     "1.0",
-                    "    ".join(w.upper() for w in self.candidates),
+                    "    ".join(
+                        word.upper()
+                        for word in self.candidates
+                    ),
                 )
-            self.possible_box.config(state="disabled")
+
+            self.possible_box.config(
+                state="disabled"
+            )
+
         else:
             self.possible_title.pack_forget()
             self.possible_label.pack_forget()
             self.possible_box.pack_forget()
 
     def update_recommendations(self):
-        self.recommendations.delete(0, tk.END)
+        self.recommendations.delete(
+            0,
+            tk.END,
+        )
+
+        # Before any feedback, use the static opening list.
+        if not self.history:
+            self.show_opening_guesses()
+            return
 
         if len(self.candidates) == 1:
             guess = self.candidates[0]
+
             self.recommendations.insert(
                 tk.END,
                 f"  1. {guess.upper():<8} SOLUTION",
             )
+
             return
 
-        # Use all legal guesses when the pool is large; once it is small,
-        # prioritize actual answer candidates so the UI recommendation is
-        # immediately actionable while retaining the information objective.
+        # Now the candidate pool is much smaller, so calculate
+        # the best guesses dynamically.
         restrict = len(self.candidates) <= 50
 
         scored = best_guesses(
@@ -357,16 +443,26 @@ class WordleGUI:
             restrict_to_candidates=restrict,
         )
 
-        for rank, (guess, metrics) in enumerate(scored, 1):
+        for rank, (guess, metrics) in enumerate(
+            scored,
+            1,
+        ):
             expected, worst, _, neg_entropy = metrics
             entropy = -neg_entropy
-            tag = "  ← answer" if guess in self.candidates else ""
+
+            tag = (
+                "  ← answer"
+                if guess in self.candidates
+                else ""
+            )
+
             self.recommendations.insert(
                 tk.END,
                 f"{rank:>2}. {guess.upper():<7}"
                 f" expected={expected:>6.2f}"
                 f"  worst={worst:>3}"
-                f"  info={entropy:>5.2f}{tag}",
+                f"  info={entropy:>5.2f}"
+                f"{tag}",
             )
 
     def reset(self):
@@ -374,14 +470,27 @@ class WordleGUI:
         self.history.clear()
         self.current_guess = ""
         self.colors = [0] * 5
-        self.entry.delete(0, tk.END)
+
+        self.entry.delete(
+            0,
+            tk.END,
+        )
 
         for tile in self.tiles:
-            tile.config(text="", bg=GRAY, fg=TEXT)
+            tile.config(
+                text="",
+                bg=GRAY,
+                fg=TEXT,
+            )
 
         self.update_candidates()
-        self.update_recommendations()
-        self.status.config(text="Reset. Enter your first guess.")
+
+        # Reset goes back to the static opening list.
+        self.show_opening_guesses()
+
+        self.status.config(
+            text="Reset. Enter your first guess."
+        )
 
 
 def launch_gui():
